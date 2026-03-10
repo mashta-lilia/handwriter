@@ -28,7 +28,7 @@ jobs:
       - name: Run Linter (Ruff)
         run: |
 
-          ruff check backend/ ml_worker/
+          ruff check backend/ ml_core/
 
 
   frontend-checks:

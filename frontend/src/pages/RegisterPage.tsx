@@ -36,6 +36,7 @@ export default function RegisterPage({ onSubmit }: RegisterPageProps) {
     if (!validate()) return
     setLoading(true)
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { confirm_password: _, ...data } = form
       await onSubmit?.(data)
     } finally {

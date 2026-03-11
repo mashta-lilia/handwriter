@@ -14,6 +14,7 @@ interface HandwritingCanvasProps {
 
 export default function HandwritingCanvas({ words, background }: HandwritingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fabricRef = useRef<any>(null)
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function HandwritingCanvas({ words, background }: HandwritingCanv
     // Re-render when words or background changes
   }, [words, background])
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const exportCanvas = () => {
     if (!fabricRef.current) return
     const dataUrl = fabricRef.current.toDataURL({ format: 'jpeg', quality: 0.9 })

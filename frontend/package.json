@@ -1,14 +1,14 @@
 {
   "dependencies": {
-    "axios": "^1.13.6",
-    "react-router-dom": "^7.13.1",
-    "zustand": "^5.0.11",  
-     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "fabric": "^6.3.0",
     "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-select": "^2.1.1",
     "@radix-ui/react-slider": "^1.2.0",
-    "@radix-ui/react-select": "^2.1.1"
+    "axios": "^1.13.6",
+    "fabric": "^6.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.13.1",
+    "zustand": "^5.0.11"
   },
   "name": "handwritter",
   "version": "0.1.0",
@@ -16,14 +16,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
-
   "devDependencies": {
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.0",
+    "@typescript-eslint/parser": "^8.57.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",

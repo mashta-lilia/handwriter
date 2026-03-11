@@ -28,14 +28,14 @@ export default function HandwritingCanvas({ words, background }: HandwritingCanv
   }, [words, background])
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const exportCanvas = () => {
-    if (!fabricRef.current) return
-    const dataUrl = fabricRef.current.toDataURL({ format: 'jpeg', quality: 0.9 })
-    const a = document.createElement('a')
-    a.href = dataUrl
-    a.download = 'handwriting.jpg'
-    a.click()
-  }
+  // const exportCanvas = () => {
+  //   if (!fabricRef.current) return
+  //   const dataUrl = fabricRef.current.toDataURL({ format: 'jpeg', quality: 0.9 })
+  //   const a = document.createElement('a')
+  //   a.href = dataUrl
+  //   a.download = 'handwriting.jpg'
+  //   a.click()
+  // }
 
   return (
     <div className="w-full h-full flex items-center justify-center">

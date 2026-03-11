@@ -1,0 +1,47 @@
+name: CD Pipeline
+
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Linters
+        run: |
+          echo "Run Python/JS linters here..."
+          pip install flake8 && flake8 backend/
+          npm run lint --prefix frontend/
+
+
+  deploy:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+
+          script: |
+
+            cd /opt/handwriter Ы
+            
+
+            git pull origin main
+            
+
+            echo "DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}" > .env
+            echo "REDIS_URL=${{ secrets.PROD_REDIS_URL }}" >> .env
+            echo "MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}" >> .env
+
+            docker compose build
+            docker compose up -d --remove-orphans

@@ -8,6 +8,7 @@ import {Table} from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
+import { Editor } from '@tiptap/react'
 
 interface RichEditorProps {
   onChange?: (html: string) => void
@@ -86,7 +87,7 @@ export default function RichEditor({ onChange }: RichEditorProps) {
       TableHeader,
     ],
     content: '<p>Paste your notes here...</p>',
-    onUpdate: ({ editor }: { editor: any }) => {
+    onUpdate: ({ editor }: { editor: Editor }) => {
       onChange?.(editor.getHTML())
     },
     editorProps: {

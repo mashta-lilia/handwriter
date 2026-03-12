@@ -86,7 +86,7 @@ export default function RichEditor({ onChange }: RichEditorProps) {
       TableHeader,
     ],
     content: '<p>Paste your notes here...</p>',
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor }: { editor: any }) => {
       onChange?.(editor.getHTML())
     },
     editorProps: {

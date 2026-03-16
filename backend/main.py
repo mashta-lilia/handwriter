@@ -14,7 +14,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from core.config import get_settings
+
+from core.config import settings
 from core.exceptions import AppError, TelegramBotNotStartedError
 from core.redis_client import close_redis
 from schemas.auth import ErrorResponse
@@ -22,7 +23,7 @@ from api.auth.register import router as register_router
 from api.auth.recovery import router as recovery_router
 
 logging.basicConfig(level=logging.INFO)
-settings = get_settings()
+settings = settings
 
 
 @asynccontextmanager

@@ -7,7 +7,7 @@ services:
     volumes:
       - ./infra/nginx:/etc/nginx/conf.d
       - /var/www/certbot:/var/www/certbot
-      - /etc/letsencrypt:/etc/letsencrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - frontend
       - backend_api

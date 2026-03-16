@@ -7,7 +7,7 @@ POST /auth/verify-registration — verify OTP → activate → return JWT pair
 
 import logging
 
-from backend.core.exceptions import UserAlreadyExistsError
+from core.exceptions import UserAlreadyExistsError
 from fastapi import APIRouter, Depends, status
 
 from core.config import get_settings

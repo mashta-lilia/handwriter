@@ -9,6 +9,11 @@ services:
       - ./infra/nginx:/etc/nginx/conf.d
       - /var/www/certbot:/var/www/certbot
       - /etc/letsencrypt:/etc/letsencrypt:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"  
+        max-file: "3"
     depends_on:
       - frontend
       - backend_api
@@ -26,6 +31,11 @@ services:
     build: 
       context: ./frontend
       dockerfile: Dockerfile
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"  
+        max-file: "3"
     depends_on:
       - backend_api
     networks:
@@ -47,6 +57,11 @@ services:
       resources:
         limits:
           memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   
+        max-file: "3"
     depends_on:
       db:
         condition: service_healthy
@@ -74,6 +89,11 @@ services:
           memory: 16GB     
         reservations:
           memory: 4GB
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   
+        max-file: "3"
     depends_on:
       - redis
       - db
@@ -96,6 +116,11 @@ services:
           memory: 4G        
         reservations:
           memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -111,6 +136,11 @@ services:
       resources:
         limits:
           memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   
+        max-file: "3"
     volumes:
       - redis_data:/data
     networks:

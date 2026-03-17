@@ -43,6 +43,10 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     depends_on:
       db:
         condition: service_healthy
@@ -63,6 +67,13 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'      
+          memory: 16GB     
+        reservations:
+          memory: 4GB
     depends_on:
       - redis
       - db
@@ -79,6 +90,12 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 4G        
+        reservations:
+          memory: 1G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -90,6 +107,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     volumes:
       - redis_data:/data
     networks:

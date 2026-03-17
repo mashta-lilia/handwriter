@@ -1,6 +1,7 @@
 services:
   nginx:
     image: nginx:1.25-alpine
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -21,6 +22,7 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt
   frontend:
     image: ghcr.io/mashta-lilia/handwriter/frontend:latest
+    restart: unless-stopped
     build: 
       context: ./frontend
       dockerfile: Dockerfile
@@ -31,6 +33,7 @@ services:
 
   backend_api:
     image: ghcr.io/mashta-lilia/handwriter/backend:latest
+    restart: unless-stopped
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -50,6 +53,7 @@ services:
 
   ml_worker:
     image: ghcr.io/mashta-lilia/handwriter/ml_worker:latest
+    restart: unless-stopped
     build:
       context: ./ml_core
       dockerfile: Dockerfile
@@ -68,16 +72,15 @@ services:
 
   db:
     image: postgres:15-alpine
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=app_db
-    ports:
-      - "5432:5432"
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d app_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -86,8 +89,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     networks:
@@ -95,13 +97,14 @@ services:
 
   minio:
     image: minio/minio
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=SuperSecretPassword
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     ports:
-      - "9000:9000" # API порт
-      - "9001:9001" # Web-интерфейс (консоль)
+      - "127.0.0.1:9000:9000" 
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     networks:
@@ -114,15 +117,13 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 5;
-      mc alias set myminio http://minio:9000 admin SuperSecretPassword;
+      mc alias set myminio http://minio:9000 admin ${MINIO_ROOT_PASSWORD};
       mc mb myminio/handwriting-assets || true;
       mc mb myminio/handwriting-words || true;
       mc anonymous set public myminio/handwriting-assets;
       mc anonymous set public myminio/handwriting-words;
       exit 0;
       "
-    networks:
-      - app_network
 
 volumes:
   postgres_data:

@@ -1,34 +1,32 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
+from backend.core.config import settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env_path = BASE_DIR / ".env"
 
 if env_path.exists():
     load_dotenv(env_path)
-else:
-    print("DEBUG: .env file not found")
 
-# Пока так
-database_url = "postgresql://postgres:mypassword@localhost:5432/my_db_name"
 
-if not database_url:
-    raise ValueError(f"DATABASE_URL not found! Check if it exists in {env_path}")
+DATABASE_URL = settings.DATABASE_URL
 
-engine = create_engine(database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+if not DATABASE_URL:
+    raise ValueError(f"DATABASE_URL не найден! Проверь файл {env_path}")
 
-def get_db():
-    '''
-        Получать сессии дб
-    '''
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+engine = create_async_engine(DATABASE_URL, echo=True, future=True, connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {})
+
+async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
+
+async def get_db():
+    async with async_session_maker() as session:
+        try:
+            yield session
+        finally:
+            await session.close()

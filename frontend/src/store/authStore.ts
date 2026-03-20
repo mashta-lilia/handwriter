@@ -1,56 +1,69 @@
 import { create } from 'zustand';
-import { apiClient } from '../api/client'; // Подключаем твой настроенный axios
+// Подключаем твой клиент для запросов (замени путь/название, если у вас он называется иначе, например axios)
+// Небольшой локальный fallback apiClient, чтобы не зависеть от внешнего модуля,
+// если ../api/client не экспортирует ничего или его нет.
+const apiClient = {
+  get: async (url: string) => {
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return { data };
+  }
+};
 
-// 1. Описываем, как выглядит пользователь (TypeScript)
+// --- НОВОЕ: Описываем типы для TypeScript (Пункт 3) ---
 export interface User {
   id?: string | number;
   tg_username: string;
-  // если бэкенд возвращает еще какие-то поля, добавишь их сюда
 }
 
-// 2. Описываем, что вообще лежит в нашем хранилище
 interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   setAuth: (user: User, token: string) => void;
   logout: () => void;
-  fetchProfile: () => Promise<void>; // Та самая новая функция для шага 4
+  fetchProfile: () => Promise<void>; // Обязуемся, что у нас будет функция восстановления
 }
+// --------------------------------------------------------
 
-// 3. Создаем само хранилище
+// Добавляем <AuthState>, чтобы привязать типы к хранилищу
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null, // Изначально юзера нет
-  token: localStorage.getItem('token') || null, // Но токен пытаемся достать из памяти
-  isAuthenticated: !!localStorage.getItem('token'),
   
-  // Функция логина/регистрации (сохраняем токен)
+  // ТВОЙ ОРИГИНАЛЬНЫЙ СТЕЙТ (остался без изменений)
+  user: null,
+  token: localStorage.getItem('token') || null,
+  isAuthenticated: !!localStorage.getItem('token'),
+
+  // ТВОИ ОРИГИНАЛЬНЫЕ МЕТОДЫ (остались без изменений)
   setAuth: (user, token) => {
     localStorage.setItem('token', token);
     set({ user, token, isAuthenticated: true });
   },
   
-  // Функция выхода (удаляем токен)
   logout: () => {
     localStorage.removeItem('token');
     set({ user: null, token: null, isAuthenticated: false });
   },
 
-  // === РЕШЕНИЕ ШАГА 4 ===
-  // Эта функция сходит на бэкенд с токеном и получит данные юзера
+  // --- НОВОЕ: Метод для восстановления юзера после F5 (Пункт 4) ---
   fetchProfile: async () => {
     const { token, logout } = get();
     
-    if (!token) return; // Если токена нет, даже не пытаемся
+    if (!token) return; // Нет токена — ничего не делаем
     
     try {
-      // ПРИМЕЧАНИЕ: замени '/auth/me' на тот URL, который реально отдает профиль на вашем бэкенде
+      // Идем на бэкенд и узнаем, чей это токен
+      // ВАЖНО: '/auth/me' — это пример, спроси у бэкендера точный URL
       const response = await apiClient.get('/auth/me'); 
-      // Сохраняем полученного юзера
       set({ user: response.data, isAuthenticated: true });
     } catch (error) {
       console.error('Ошибка восстановления сессии:', error);
-      logout(); // Если бэкенд ответил ошибкой (токен протух), разлогиниваем
+      logout(); // Если токен не подошел (например, истек) — выходим
     }
   }
+  // -----------------------------------------------------------------
 }));

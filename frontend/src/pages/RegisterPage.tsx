@@ -64,14 +64,15 @@ export default function RegisterPage({ onSubmit }: RegisterPageProps) {
     
     setLoading(true);
     try {
-      // 4. ИСПРАВЛЕНИЕ: Передаем только нужные поля (без confirm_password)
       await onSubmit({ 
         tg_username: form.tg_username, 
         password: form.password 
       });
-    } catch (error: any) {
-      // Вытаскиваем сообщение об ошибке с бэкенда
-      const serverError = error.response?.data?.message || 'Произошла ошибка при регистрации';
+    } catch (error) { 
+      // Убрали :any. Вместо этого говорим TS, как выглядит наша ошибка от сервера
+      const err = error as { response?: { data?: { message?: string } } };
+      const serverError = err?.response?.data?.message || 'Произошла ошибка при регистрации';
+      
       setErrors((prev) => ({ ...prev, server: serverError })); 
     } finally {
       setLoading(false);

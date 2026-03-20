@@ -7,8 +7,9 @@ POST /auth/verify-registration — verify OTP → activate → return JWT pair
 
 import logging
 
-from core.exceptions import UserAlreadyExistsError
-from fastapi import APIRouter, Depends, status
+from api.auth.security import verify_password
+from fastapi import APIRouter, Depends, status, HTTPException
+from core.exceptions import UserAlreadyExistsError, UserInactiveError
 
 from core.config import get_settings
 from dependencies.services import get_otp_service, get_telegram_service, get_token_service
@@ -18,6 +19,7 @@ from schemas.auth import (
     TokenPairResponse,
     VerifyRegistrationRequest,
     VerifyRegistrationResponse,
+    LoginRequest,
 )
 from services.auth.otp_service import OTPService
 from services.auth.telegram import TelegramService
@@ -111,3 +113,13 @@ async def verify_registration(
             refresh_token=pair.refresh_token,
         )
     )
+
+@router.post("/login")
+async def login(body: LoginRequest, token_svc: TokenService = Depends(get_token_service)):
+    user = await token_svc.get_user_by_tg(tg_username=body.tg_username)
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not user.is_active:
+        raise UserInactiveError()
+    pair = await token_svc.create_tokens_for_user(user_id=user.id)
+    return TokenPairResponse(access_token=pair.access_token, refresh_token=pair.refresh_token)

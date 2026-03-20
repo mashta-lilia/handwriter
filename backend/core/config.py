@@ -2,21 +2,30 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # Эти переменные должны быть в твоем .env на сервере
+    # Database
     DATABASE_URL: str
-    REDIS_URL: str
-    
-    # Если используются для Minio
-    MINIO_ROOT_USER: str = "admin"
-    MINIO_ROOT_PASSWORD: str = "SuperSecretPassword"
-    MINIO_ENDPOINT: str = "minio:9000"
+
+    # Redis
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: str = ""
+    redis_db: int = 0
+    otp_ttl_seconds: int = 300
+
+    # Telegram
+    telegram_bot_token: str
+    telegram_bot_username: str
+
+    # JWT
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 @lru_cache()
-def get_settings():
-    """Функция для тех частей кода, которые привыкли вызывать get_settings()"""
+def get_settings() -> Settings:
     return Settings()
 
-# Переменная для тех частей кода, которые хотят просто импортировать settings
 settings = get_settings()

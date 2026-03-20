@@ -15,8 +15,12 @@ Usage:
     ): ...
 """
 
+
 from fastapi import Depends
 from redis.asyncio import Redis
+
+from core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.redis_client import get_redis
 from services.auth.otp_service import OTPService
@@ -32,7 +36,5 @@ def get_telegram_service() -> TelegramService:
     return TelegramService()
 
 
-def get_token_service() -> TokenService:
-    # When Developer 1 delivers their module, swap TokenService() here
-    # with their real implementation, e.g. JWTTokenService(db=db)
-    return TokenService()
+def get_token_service(db: AsyncSession = Depends(get_db)) -> TokenService:
+    return TokenService(db=db)

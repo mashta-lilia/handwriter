@@ -6,7 +6,7 @@ from alembic import context
 
 from backend.core.config import settings
 from backend.core.database import Base
-from backend.api.auth.models import User 
+from backend.models.user import User 
 
 config = context.config
 

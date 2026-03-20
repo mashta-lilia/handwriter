@@ -89,3 +89,12 @@ class ErrorResponse(BaseModel):
     error_code: str
     message: str
     bot_username: str | None = None  # only set for TELEGRAM_BOT_NOT_STARTED
+
+class LoginRequest(BaseModel):
+    tg_username: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("tg_username")
+    @classmethod
+    def validate_tg(cls, v: str) -> str:
+        return _clean_tg(v)

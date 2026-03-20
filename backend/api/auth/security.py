@@ -1,46 +1,66 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Union, Any
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
+from core.config import get_settings
+from core.exceptions import AppError
 
-SECRET_KEY = ""
-ALGORITHM = "HS256"
-# tokens
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+settings = get_settings()
 
-# Setups
+ALGORITHM = settings.jwt_algorithm
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
+class InvalidTokenError(AppError):
+    error_code = "INVALID_TOKEN"
+    status_code = 401
+    message = "Invalid or expired token."
+
+
 def hash_password(password: str) -> str:
-    '''
-        Хэшировать пароль
-    '''
     return pwd_context.hash(password)
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    '''
-        Чекнуть пароль
-    '''
     return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
-    '''
-        Для генерации токена (подтверждение)
-    '''
-        
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def create_refresh_token(subject: Union[str, Any]) -> str:
-    '''
-        Генерация токена (д)
-    '''
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+def generate_tokens(user_id: int) -> dict:
+    """Returns both access and refresh tokens — main entry point."""
+    return {
+        "access_token": _create_access_token(user_id),
+        "refresh_token": _create_refresh_token(user_id),
+    }
+
+
+def verify_access_token(token: str) -> int:
+    """Decode token and return user_id. Raises InvalidTokenError on failure."""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[ALGORITHM])
+        if payload.get("type") != "access":
+            raise InvalidTokenError()
+        return int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        raise InvalidTokenError()
+
+
+def _create_access_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.access_token_expire_minutes
+    )
+    return jwt.encode(
+        {"exp": expire, "sub": str(user_id), "type": "access"},
+        settings.jwt_secret_key,
+        algorithm=ALGORITHM,
+    )
+
+
+def _create_refresh_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.refresh_token_expire_days
+    )
+    return jwt.encode(
+        {"exp": expire, "sub": str(user_id), "type": "refresh"},
+        settings.jwt_secret_key,
+        algorithm=ALGORITHM,
+    )

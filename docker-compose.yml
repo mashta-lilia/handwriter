@@ -17,11 +17,23 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/app_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=redis://redis:6379/0
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ROOT_USER=admin
-      - MINIO_ROOT_PASSWORD=SuperSecretPassword
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   
+        max-file: "3"
     depends_on:
       db:
         condition: service_healthy
@@ -36,7 +48,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://user:password@db:5432/app_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=SuperSecretPassword

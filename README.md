@@ -1,95 +1,89 @@
-
-Looking at what was submitted vs what Task 1.1 actually requires — there are serious gaps.
-
----
-
-**What was submitted:**
-- `database.py` — DB connection setup
-- `alembic/` — migration scaffolding (env.py, ini, mako template)
-
-**What Task 1.1 requires:**
-- ✅ DB connection — present
-- ❌ User model with all 5 fields — **missing entirely**
-- ❌ Actual migration file — **only templates, no real migration**
-- ❌ CRUD operations — **missing entirely**
+The library choices are correct (`jose`, `passlib/bcrypt`) and the basic structure works, but there are several real issues before this is mergeable.
 
 ---
 
-**Bugs in what was submitted:**
+**❌ `SECRET_KEY = ""` — critical security bug**
 
-**1. Database URL is hardcoded — twice**
-
-In `database.py`:
+An empty secret key means every JWT is signed with an empty string. Anyone can forge tokens. Must be loaded from `.env`:
 ```python
-# This loads .env...
-load_dotenv(env_path)
-
-# ...then ignores it completely
-database_url = "postgresql://postgres:mypassword@localhost:5432/my_db_name"
+from core.config import get_settings
+settings = get_settings()
+SECRET_KEY = settings.jwt_secret_key
 ```
 
-And again hardcoded in `alembic.ini`:
-```ini
-sqlalchemy.url = postgresql://postgres:mypassword@localhost:5432/my_db_name
+---
+
+**❌ `generate_tokens(user_id)` is missing — the main deliverable**
+
+The task explicitly asks for `generate_tokens(user_id)` that returns a **pair**. What was submitted is two separate functions with no unified entry point. Developer 2's `token_service.py` calls `create_tokens_for_user(user_id)` and expects back both tokens at once. The required function:
+
+```python
+def generate_tokens(user_id: int) -> dict:
+    access = create_access_token(subject=user_id)
+    refresh = create_refresh_token(subject=user_id)
+    return {"access_token": access, "refresh_token": refresh}
 ```
 
-Real passwords committed to git is a security problem. Should be:
+---
+
+**❌ `verify_access_token(token)` is missing entirely**
+
+Task explicitly requires this function. Without it, protected routes can't authenticate users:
+
 ```python
-database_url = os.getenv("DATABASE_URL")
+def verify_access_token(token: str) -> int:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "access":
+            raise InvalidTokenError()
+        return int(payload["sub"])
+    except JWTError:
+        raise InvalidTokenError()
 ```
 
-**2. Sync engine conflicts with our async stack**
+---
 
-`database.py` uses `create_engine` (synchronous). Our entire backend uses `asyncpg` and async FastAPI. This will deadlock. It needs to be:
-```python
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-```
+**⚠️ `datetime.utcnow()` is deprecated in Python 3.12+**
 
-**3. Deprecated import**
+Since the project runs on Python 3.13:
 ```python
-# Old — deprecated in SQLAlchemy 1.4+
-from sqlalchemy.ext.declarative import declarative_base
+# Old
+datetime.utcnow()
 
 # Correct
-from sqlalchemy.orm import DeclarativeBase
+datetime.now(timezone.utc)
 ```
-
-**4. `env.py` imports `settings` that doesn't exist yet**
-```python
-from backend.core.config import settings  # uses .DATABASE_URL
-```
-But `database.py` never uses `settings` — it hardcodes the URL. These two files are inconsistent with each other.
 
 ---
 
-**What needs to be added before this is mergeable:**
+**⚠️ Wrong file location**
 
-`backend/models/user.py` — the entire point of this task:
-```python
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Boolean, DateTime, func
-from core.database import Base
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tg_username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(256))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-```
-
-`backend/services/user_crud.py` — also missing:
-```python
-async def create_inactive_user(...) -> User
-async def get_user_by_tg(tg_username: str) -> User | None
-async def update_password(tg_username: str, new_hash: str) -> User
-async def activate_user(tg_username: str) -> User
-```
-
-And an actual generated migration file in `alembic/versions/` — right now only the template exists, no real migration has been generated.
+The file is at `backend/api/auth/security.py` — auth logic doesn't belong in the API layer. This is a service, it should live at `backend/services/auth/security.py` or `backend/core/security.py`, consistent with how the rest of the project is structured.
 
 ---
 
-**Summary for Developer 1:** The scaffolding is there but the core deliverables (model + CRUD) are missing, the async/sync mismatch will break integration with Developer 2's code, and credentials must not be hardcoded.
+**⚠️ `expires_delta: timedelta = None` — bad type hint**
+
+```python
+# Wrong — None is not a timedelta
+def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None)
+
+# Correct
+def create_access_token(subject: Union[str, Any], expires_delta: timedelta | None = None)
+```
+
+---
+
+**Summary for Developer 1:**
+
+| Requirement | Status |
+|---|---|
+| `hash_password()` | ✅ Present |
+| `verify_password()` | ✅ Present |
+| `generate_tokens(user_id)` | ❌ Missing |
+| `verify_access_token(token)` | ❌ Missing |
+| `SECRET_KEY` from env | ❌ Hardcoded empty string |
+| Correct file location | ⚠️ Wrong layer |
+| Python 3.13 compatibility | ⚠️ Deprecated datetime |
+
+Two of the four required functions are missing, and the empty `SECRET_KEY` is a blocker — this cannot be merged as-is.

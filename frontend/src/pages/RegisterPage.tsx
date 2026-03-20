@@ -11,7 +11,8 @@ interface RegisterFormData {
 }
 
 interface RegisterPageProps {
-  onSubmit?: (data: Omit<RegisterFormData, 'confirm_password'>) => Promise<void>
+  // 1. ИСПРАВЛЕНИЕ: Убрали знак вопроса (?), теперь пропс обязательный!
+  onSubmit: (data: Omit<RegisterFormData, 'confirm_password'>) => Promise<void>
 }
 
 export default function RegisterPage({ onSubmit }: RegisterPageProps) {
@@ -21,25 +22,59 @@ export default function RegisterPage({ onSubmit }: RegisterPageProps) {
     confirm_password: '',
   })
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<Partial<RegisterFormData>>({})
+  // 2. ИСПРАВЛЕНИЕ: Изменили тип, чтобы можно было хранить поле 'server'
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = () => {
-    const e: Partial<RegisterFormData> = {}
-    if (!form.tg_username) e.tg_username = 'Required'
-    if (!form.password) e.password = 'Required'
-    if (form.password !== form.confirm_password) e.confirm_password = 'Passwords do not match'
-    setErrors(e)
-    return Object.keys(e).length === 0
+    const newErrors: Record<string, string> = {};
+    let isValid = true;
+
+    // Проверка Telegram Username
+    const tgRegex = /^[a-zA-Z0-9_]{5,}$/;
+    if (!form.tg_username) {
+      newErrors.tg_username = 'Обязательное поле';
+      isValid = false;
+    } else if (!tgRegex.test(form.tg_username.replace('@', ''))) { 
+      newErrors.tg_username = 'Минимум 5 символов, только латиница, цифры и "_"';
+      isValid = false;
+    }
+
+    // Проверка длины пароля
+    if (!form.password) {
+      newErrors.password = 'Обязательное поле';
+      isValid = false;
+    } else if (form.password.length < 8) {
+      newErrors.password = 'Пароль должен быть не менее 8 символов';
+      isValid = false;
+    }
+
+    // 3. ИСПРАВЛЕНИЕ: Вернули проверку на совпадение паролей!
+    if (form.password !== form.confirm_password) {
+      newErrors.confirm_password = 'Пароли не совпадают';
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
   }
 
-  const handleSubmit = async () => {
-    if (!validate()) return
-    setLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    
+    setLoading(true);
     try {
-      const { confirm_password: _, ...data } = form
-      await onSubmit?.(data)
+      // 4. ИСПРАВЛЕНИЕ: Передаем только нужные поля (без confirm_password)
+      await onSubmit({ 
+        tg_username: form.tg_username, 
+        password: form.password 
+      });
+    } catch (error: any) {
+      // Вытаскиваем сообщение об ошибке с бэкенда
+      const serverError = error.response?.data?.message || 'Произошла ошибка при регистрации';
+      setErrors((prev) => ({ ...prev, server: serverError })); 
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -62,6 +97,13 @@ export default function RegisterPage({ onSubmit }: RegisterPageProps) {
           </div>
 
           <div className="flex flex-col gap-5">
+            {/* 5. ИСПРАВЛЕНИЕ: Блок для вывода ошибки от сервера */}
+            {errors.server && (
+              <div className="p-3 bg-red-500/10 border border-red-500/50 rounded text-red-400 text-sm text-center">
+                {errors.server}
+              </div>
+            )}
+
             <Input
               label="Telegram Username"
               placeholder="@username"

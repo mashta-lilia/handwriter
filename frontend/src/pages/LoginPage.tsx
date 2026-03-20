@@ -43,7 +43,7 @@ return (
 </div>
 <div className="flex flex-col gap-5">
 <Input
-label="TelegramUsername"
+label="Username"
 placeholder="@username"
 value={form.tg_username}
 onChange={(e) => setForm({ ...form, tg_username: e.target.value })}

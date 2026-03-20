@@ -1,13 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends
-from core.database import get_db
 from models.user import User
 import api.auth.crud as crud
 from api.auth.security import (
-    hash_password, generate_tokens, verify_password
+    hash_password, generate_tokens
 )
 from dataclasses import dataclass
-from core.exceptions import UserAlreadyExistsError, UserNotFoundError, UserInactiveError
+from core.exceptions import UserAlreadyExistsError, UserNotFoundError
 @dataclass
 class TokenPair:
     access_token: str
@@ -19,8 +17,8 @@ class TokenService:
 
     async def create_inactive_user(self, username: str, tg_username: str, password: str) -> User:
         try:
-            existing = await crud.get_user_by_tg(self._db, tg_username)
-            raise UserAlreadyExistsError()  # user found → duplicate
+            await crud.get_user_by_tg(self._db, tg_username) # Removed "existing = "
+            raise UserAlreadyExistsError() # user found → duplicate
         except UserNotFoundError:
             pass  # user doesn't exist → safe to create
         return await crud.create_user(self._db, tg_username, hash_password(password))

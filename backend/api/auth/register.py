@@ -28,8 +28,7 @@ from services.auth.token_service import TokenService
 log = logging.getLogger(__name__)
 settings = get_settings()
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post(
     "/register",

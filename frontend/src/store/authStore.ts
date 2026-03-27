@@ -6,7 +6,11 @@ const apiClient = {
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const error = new Error(`HTTP ${res.status}`) as Error & { status: number };
+      error.status = res.status;
+      throw error;
+    }
     const data = await res.json();
     return { data };
   }
@@ -54,8 +58,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await apiClient.get('/api/auth/me');
       set({ user: response.data, isAuthenticated: true });
     } catch (error) {
-      console.error('Помилка відновлення сесії:', error);
-      logout();
+      const err = error as Error & { status?: number };
+      if (err?.status === 401) {
+        logout(); // Token expired or invalid — clear session
+      }
+      // Any other error (404, network) — do nothing, keep existing session
     }
   }
 }));

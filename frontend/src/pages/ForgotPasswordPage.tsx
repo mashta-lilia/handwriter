@@ -1,26 +1,37 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
 
-interface ForgotPasswordPageProps {
-  onSendCode?: (tg_username: string) => Promise<void>
-  onReset?: (data: { code: string; new_password: string }) => Promise<void>
-}
-
-export default function ForgotPasswordPage({ onSendCode, onReset }: ForgotPasswordPageProps) {
+export default function ForgotPasswordPage() {
+  const navigate = useNavigate()
   const [step, setStep] = useState<1 | 2>(1)
   const [username, setUsername] = useState('')
   const [code, setCode] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleSend = async () => {
     if (!username) return
     setLoading(true)
+    setError('')
     try {
-      await onSendCode?.(username)
-      setStep(2)
+      const tg = username.replace('@', '')
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tg_username: tg }),
+      })
+
+      if (res.ok) {
+        setStep(2)
+      } else {
+        const data = await res.json()
+        setError(data?.message || 'Щось пішло не так')
+      }
+    } catch {
+      setError('Сервер недоступний. Спробуйте пізніше.')
     } finally {
       setLoading(false)
     }
@@ -29,8 +40,26 @@ export default function ForgotPasswordPage({ onSendCode, onReset }: ForgotPasswo
   const handleReset = async () => {
     if (!code || !newPassword) return
     setLoading(true)
+    setError('')
     try {
-      await onReset?.({ code, new_password: newPassword })
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tg_username: username.replace('@', ''),
+          code,
+          new_password: newPassword,
+        }),
+      })
+
+      if (res.ok) {
+        navigate('/login')
+      } else {
+        const data = await res.json()
+        setError(data?.message || 'Невірний або прострочений код')
+      }
+    } catch {
+      setError('Сервер недоступний. Спробуйте пізніше.')
     } finally {
       setLoading(false)
     }
@@ -54,13 +83,19 @@ export default function ForgotPasswordPage({ onSendCode, onReset }: ForgotPasswo
             </h1>
           </div>
 
+          {error && (
+            <div className="mb-5 p-3 bg-red-500/10 border border-red-500/50 rounded text-red-400 text-sm text-center">
+              {error}
+            </div>
+          )}
+
           {step === 1 ? (
             <div className="flex flex-col gap-5">
               <Input
                 label="Telegram Username"
                 placeholder="@username"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => { setError(''); setUsername(e.target.value) }}
               />
               <Button onClick={handleSend} loading={loading} className="w-full">
                 Send Reset Code
@@ -72,14 +107,14 @@ export default function ForgotPasswordPage({ onSendCode, onReset }: ForgotPasswo
                 label="Reset Code"
                 placeholder="000000"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => { setError(''); setCode(e.target.value) }}
               />
               <Input
                 label="New Password"
                 type="password"
                 placeholder="••••••••"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => { setError(''); setNewPassword(e.target.value) }}
               />
               <Button onClick={handleReset} loading={loading} className="w-full">
                 Reset Password

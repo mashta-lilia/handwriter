@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Input from '../components/ui/Input'
 import PasswordInput from '../components/ui/PasswordInput'
 import Button from '../components/ui/Button'
@@ -10,47 +10,39 @@ interface RegisterFormData {
   confirm_password: string
 }
 
-interface RegisterPageProps {
-  // 1. ИСПРАВЛЕНИЕ: Убрали знак вопроса (?), теперь пропс обязательный!
-  onSubmit: (data: Omit<RegisterFormData, 'confirm_password'>) => Promise<void>
-}
-
-export default function RegisterPage({ onSubmit }: RegisterPageProps) {
+export default function RegisterPage() {
+  const navigate = useNavigate()
   const [form, setForm] = useState<RegisterFormData>({
     tg_username: '',
     password: '',
     confirm_password: '',
   })
   const [loading, setLoading] = useState(false)
-  // 2. ИСПРАВЛЕНИЕ: Изменили тип, чтобы можно было хранить поле 'server'
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
     let isValid = true;
 
-    // Проверка Telegram Username
     const tgRegex = /^[a-zA-Z0-9_]{5,}$/;
     if (!form.tg_username) {
-      newErrors.tg_username = 'Обязательное поле';
+      newErrors.tg_username = 'Обов\'язкове поле';
       isValid = false;
-    } else if (!tgRegex.test(form.tg_username.replace('@', ''))) { 
-      newErrors.tg_username = 'Минимум 5 символов, только латиница, цифры и "_"';
+    } else if (!tgRegex.test(form.tg_username.replace('@', ''))) {
+      newErrors.tg_username = 'Мінімум 5 символів, лише латиниця, цифри та "_"';
       isValid = false;
     }
 
-    // Проверка длины пароля
     if (!form.password) {
-      newErrors.password = 'Обязательное поле';
+      newErrors.password = 'Обов\'язкове поле';
       isValid = false;
     } else if (form.password.length < 8) {
-      newErrors.password = 'Пароль должен быть не менее 8 символов';
+      newErrors.password = 'Пароль має бути не менше 8 символів';
       isValid = false;
     }
 
-    // 3. ИСПРАВЛЕНИЕ: Вернули проверку на совпадение паролей!
     if (form.password !== form.confirm_password) {
-      newErrors.confirm_password = 'Пароли не совпадают';
+      newErrors.confirm_password = 'Паролі не співпадають';
       isValid = false;
     }
 
@@ -58,22 +50,43 @@ export default function RegisterPage({ onSubmit }: RegisterPageProps) {
     return isValid;
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!validate()) return;
-    
+
     setLoading(true);
+    setErrors({});
     try {
-      await onSubmit({ 
-        tg_username: form.tg_username, 
-        password: form.password 
+      const tg = form.tg_username.replace('@', '')
+
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: tg,
+          tg_username: tg,
+          password: form.password,
+        }),
       });
-    } catch (error) { 
-      // Убрали :any. Вместо этого говорим TS, как выглядит наша ошибка от сервера
-      const err = error as { response?: { data?: { message?: string } } };
-      const serverError = err?.response?.data?.message || 'Произошла ошибка при регистрации';
-      
-      setErrors((prev) => ({ ...prev, server: serverError })); 
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data?.error_code === 'USER_ALREADY_EXISTS') {
+          setErrors({ tg_username: 'Цей Telegram акаунт вже зареєстрований.' });
+        } else if (data?.error_code === 'TELEGRAM_BOT_NOT_STARTED') {
+          setErrors({ server: `Спочатку запустіть нашого Telegram бота: @${data.bot_username}` });
+        } else {
+          setErrors({ server: data?.message || 'Помилка при реєстрації' });
+        }
+        return;
+      }
+
+      // Registration successful — redirect to OTP verification
+      navigate('/verify-registration', {
+        state: { tg_username: tg },
+      });
+    } catch {
+      setErrors({ server: 'Сервер недоступний. Спробуйте пізніше.' });
     } finally {
       setLoading(false);
     }

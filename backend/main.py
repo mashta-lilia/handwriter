@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from api.telegram.webhook import router as telegram_router
 
 
 from core.config import settings
@@ -38,7 +39,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
+app.include_router(telegram_router)
 # ── Global error handler ──────────────────────────────────────────────────────
 
 @app.exception_handler(AppError)

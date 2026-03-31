@@ -1,20 +1,20 @@
 """
-Task 2.1 — Telegram Bot API Integration
-========================================
-Wraps the Bot API sendMessage call and translates raw HTTP/API errors
-into domain exceptions that routers convert to structured JSON.
+Telegram Bot API Integration
+==============================
+Wraps the Bot API sendMessage call.
 
-Critical constraint
--------------------
-Telegram bots cannot send the first message — the user must press /start
-in the bot chat first. If they haven't, the API returns HTTP 403.
-We surface this as TelegramBotNotStartedError (error_code = "TELEGRAM_BOT_NOT_STARTED")
-so the frontend can display:
-    "Please start our bot first: @<bot_username>"
+IMPORTANT: Telegram bots cannot send by @username reliably.
+Instead we store the numeric chat_id in Redis when the user
+presses /start, then look it up here before sending.
+
+Redis key schema:
+    tg_chat_id:<lowercase_username>  →  "<numeric_chat_id>"
 """
 
 import logging
 import httpx
+
+from redis.asyncio import Redis
 
 from core.config import get_settings
 from core.exceptions import TelegramBotNotStartedError, TelegramSendError
@@ -23,33 +23,53 @@ log = logging.getLogger(__name__)
 settings = get_settings()
 
 _API_BASE = "https://api.telegram.org/bot{token}/{method}"
+_CHAT_ID_PREFIX = "tg_chat_id"
+
+
+def _chat_id_key(tg_username: str) -> str:
+    return f"{_CHAT_ID_PREFIX}:{tg_username.lstrip('@').lower()}"
 
 
 class TelegramService:
 
     def __init__(
         self,
+        redis: Redis,
         token: str | None = None,
         bot_username: str | None = None,
     ):
+        self._redis = redis
         self._token = token or settings.telegram_bot_token
         self._bot_username = bot_username or settings.telegram_bot_username
         self._base = _API_BASE.format(token=self._token, method="{method}")
 
     # ── Public ────────────────────────────────────────────────────────────────
 
+    async def save_chat_id(self, tg_username: str, chat_id: int) -> None:
+        """Store numeric chat_id for a username when user presses /start."""
+        await self._redis.set(_chat_id_key(tg_username), str(chat_id))
+        log.info("Saved chat_id=%d for @%s", chat_id, tg_username)
+
     async def send_message(self, tg_username: str, text: str) -> None:
         """
         Send *text* to *tg_username* via the Telegram Bot API.
+        Looks up the numeric chat_id from Redis first.
 
         Raises
         ------
         TelegramBotNotStartedError
-            User never pressed /start.  Frontend must prompt them.
+            User never pressed /start — no chat_id in Redis.
         TelegramSendError
-            Any other delivery failure (timeout, rate-limit, network).
+            Any other delivery failure.
         """
-        chat_id = _normalise(tg_username)
+        stored = await self._redis.get(_chat_id_key(tg_username))
+        if stored is None:
+            log.warning("No chat_id found for @%s — user never pressed /start", tg_username)
+            raise TelegramBotNotStartedError(
+                f"Please start our bot first: @{self._bot_username}"
+            )
+
+        chat_id = int(stored)
         url = self._base.format(method="sendMessage")
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
 
@@ -64,7 +84,7 @@ class TelegramService:
             raise TelegramSendError("Could not reach Telegram. Try again later.") from exc
 
         self._check_response(resp, tg_username)
-        log.info("Telegram message delivered to %s", tg_username)
+        log.info("Telegram message delivered to @%s (chat_id=%d)", tg_username, chat_id)
 
     @property
     def bot_username(self) -> str:
@@ -89,8 +109,6 @@ class TelegramService:
             tg_username, error_code, description,
         )
 
-        # 403 = bot blocked / user never started it
-        # 400 with "chat not found" = same root cause
         if error_code == 403 or (error_code == 400 and "chat not found" in description):
             raise TelegramBotNotStartedError(
                 f"Please start our bot first: @{self._bot_username}"
@@ -99,9 +117,3 @@ class TelegramService:
         raise TelegramSendError(
             f"Telegram error {error_code}: {data.get('description', '')}"
         )
-
-
-def _normalise(username: str) -> str:
-    """Ensure the username has a leading @ for use as a Telegram chat_id."""
-    username = username.strip()
-    return username if username.startswith("@") else f"@{username}"

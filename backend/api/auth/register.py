@@ -1,14 +1,16 @@
 """
-Task 2.3 — Registration flow
-=============================
+Registration flow
+==================
 POST /auth/register          — create inactive user → OTP → Telegram
 POST /auth/verify-registration — verify OTP → activate → return JWT pair
+POST /auth/login             — login with password
+GET  /auth/me                — get current user from token
 """
 
 import logging
 
-from api.auth.security import verify_password
-from fastapi import APIRouter, Depends, status, HTTPException
+from api.auth.security import verify_password, verify_access_token
+from fastapi import APIRouter, Depends, status, HTTPException, Header
 from core.exceptions import UserAlreadyExistsError, UserInactiveError
 
 from core.config import get_settings
@@ -24,11 +26,14 @@ from schemas.auth import (
 from services.auth.otp_service import OTPService
 from services.auth.telegram import TelegramService
 from services.auth.token_service import TokenService
+from sqlalchemy import select
+from models.user import User
 
 log = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
 
 @router.post(
     "/register",
@@ -41,17 +46,6 @@ async def register(
     otp_svc: OTPService = Depends(get_otp_service),
     tg_svc: TelegramService = Depends(get_telegram_service),
 ) -> RegisterResponse:
-    """
-    1. Create an inactive user (Developer 1's TokenService).
-    2. Generate OTP and store it in Redis with 5-min TTL.
-    3. Send OTP to user's Telegram account.
-       → If user never pressed /start, raises TelegramBotNotStartedError.
-         The global error handler serialises this to:
-         { "error_code": "TELEGRAM_BOT_NOT_STARTED",
-           "message": "Please start our bot first: @<bot>",
-           "bot_username": "<bot>" }
-    """
-    # Step 1 — create user, skip if already pending verification
     try:
         await token_svc.create_inactive_user(
             username=body.username,
@@ -59,16 +53,13 @@ async def register(
             password=body.password,
         )
     except UserAlreadyExistsError:
-        # User exists but is inactive — allow OTP resend
         user = await token_svc.get_user_by_tg(tg_username=body.tg_username)
         if user.is_active:
-            raise  # genuinely duplicate — re-raise
+            raise
 
-    # Step 2 — generate and persist OTP
     code = otp_svc.generate()
     await otp_svc.save_otp(tg_username=body.tg_username, code=code)
 
-    # Step 3 — deliver via Telegram
     await tg_svc.send_message(
         tg_username=body.tg_username,
         text=(
@@ -91,18 +82,8 @@ async def verify_registration(
     token_svc: TokenService = Depends(get_token_service),
     otp_svc: OTPService = Depends(get_otp_service),
 ) -> VerifyRegistrationResponse:
-    """
-    1. Validate OTP from Redis.
-    2. Set user is_active=True in the DB.
-    3. Issue JWT pair and return it to the frontend.
-    """
-    # Step 1 — raises OTPInvalidError / OTPNotFoundError on failure
     await otp_svc.verify_otp(tg_username=body.tg_username, code=body.code)
-
-    # Step 2 — activate user
     user = await token_svc.activate_user(tg_username=body.tg_username)
-
-    # Step 3 — issue JWT pair
     pair = await token_svc.create_tokens_for_user(user_id=user.id)
 
     log.info("User @%s verified and activated", body.tg_username)
@@ -113,12 +94,34 @@ async def verify_registration(
         )
     )
 
+
 @router.post("/login")
-async def login(body: LoginRequest, token_svc: TokenService = Depends(get_token_service)):
+async def login(
+    body: LoginRequest,
+    token_svc: TokenService = Depends(get_token_service),
+):
     user = await token_svc.get_user_by_tg(tg_username=body.tg_username)
     if not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
         raise UserInactiveError()
     pair = await token_svc.create_tokens_for_user(user_id=user.id)
-    return TokenPairResponse(access_token=pair.access_token, refresh_token=pair.refresh_token)
+    return TokenPairResponse(
+        access_token=pair.access_token,
+        refresh_token=pair.refresh_token,
+    )
+
+
+@router.get("/me")
+async def get_me(
+    authorization: str = Header(...),
+    token_svc: TokenService = Depends(get_token_service),
+):
+    """Return current user from JWT token. Used by frontend on page refresh."""
+    token = authorization.replace("Bearer ", "")
+    user_id = verify_access_token(token)
+    result = await token_svc._db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "user": {"id": user.id, "tg_username": user.tg_username}}

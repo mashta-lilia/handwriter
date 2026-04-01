@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Input from '../components/ui/Input'
 import PasswordInput from '../components/ui/PasswordInput'
 import Button from '../components/ui/Button'
@@ -10,37 +10,85 @@ interface RegisterFormData {
   confirm_password: string
 }
 
-interface RegisterPageProps {
-  onSubmit?: (data: Omit<RegisterFormData, 'confirm_password'>) => Promise<void>
-}
-
-export default function RegisterPage({ onSubmit }: RegisterPageProps) {
+export default function RegisterPage() {
+  const navigate = useNavigate()
   const [form, setForm] = useState<RegisterFormData>({
     tg_username: '',
     password: '',
     confirm_password: '',
   })
   const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState<Partial<RegisterFormData>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = () => {
-    const e: Partial<RegisterFormData> = {}
-    if (!form.tg_username) e.tg_username = 'Required'
-    if (!form.password) e.password = 'Required'
-    if (form.password !== form.confirm_password) e.confirm_password = 'Passwords do not match'
-    setErrors(e)
-    return Object.keys(e).length === 0
+    const newErrors: Record<string, string> = {};
+    let isValid = true;
+
+    const tgRegex = /^[a-zA-Z0-9_]{5,}$/;
+    if (!form.tg_username) {
+      newErrors.tg_username = 'Обов\'язкове поле';
+      isValid = false;
+    } else if (!tgRegex.test(form.tg_username.replace('@', ''))) {
+      newErrors.tg_username = 'Мінімум 5 символів, лише латиниця, цифри та "_"';
+      isValid = false;
+    }
+
+    if (!form.password) {
+      newErrors.password = 'Обов\'язкове поле';
+      isValid = false;
+    } else if (form.password.length < 8) {
+      newErrors.password = 'Пароль має бути не менше 8 символів';
+      isValid = false;
+    }
+
+    if (form.password !== form.confirm_password) {
+      newErrors.confirm_password = 'Паролі не співпадають';
+      isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
   }
 
   const handleSubmit = async () => {
-    if (!validate()) return
-    setLoading(true)
+    if (!validate()) return;
+
+    setLoading(true);
+    setErrors({});
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { confirm_password: _, ...data } = form
-      await onSubmit?.(data)
+      const tg = form.tg_username.replace('@', '')
+
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: tg,
+          tg_username: tg,
+          password: form.password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data?.error_code === 'USER_ALREADY_EXISTS') {
+          setErrors({ tg_username: 'Цей Telegram акаунт вже зареєстрований.' });
+        } else if (data?.error_code === 'TELEGRAM_BOT_NOT_STARTED') {
+          setErrors({ server: `Спочатку запустіть нашого Telegram бота: @${data.bot_username}` });
+        } else {
+          setErrors({ server: data?.message || 'Помилка при реєстрації' });
+        }
+        return;
+      }
+
+      // Registration successful — redirect to OTP verification
+      navigate('/verify-registration', {
+        state: { tg_username: tg },
+      });
+    } catch {
+      setErrors({ server: 'Сервер недоступний. Спробуйте пізніше.' });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -63,6 +111,13 @@ export default function RegisterPage({ onSubmit }: RegisterPageProps) {
           </div>
 
           <div className="flex flex-col gap-5">
+            {/* 5. ИСПРАВЛЕНИЕ: Блок для вывода ошибки от сервера */}
+            {errors.server && (
+              <div className="p-3 bg-red-500/10 border border-red-500/50 rounded text-red-400 text-sm text-center">
+                {errors.server}
+              </div>
+            )}
+
             <Input
               label="Telegram Username"
               placeholder="@username"

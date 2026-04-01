@@ -72,3 +72,8 @@ minio_data/
 ehthumbs.db
 Thumbs.db
 *~
+
+node_modules/
+frontend/node_modules/
+*~
+.docker/

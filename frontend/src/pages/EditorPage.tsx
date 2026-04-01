@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import ProgressBar from '../components/ui/ProgressBar'
-import HandwritingCanvas from '../components/canvas/HandwritingCanvas'
+import HandwritingCanvas, { type WordObject } from '../components/canvas/HandwritingCanvas'
 import RichEditor from '../components/ui/RichEditor'
 
 const PEN_COLORS = [
@@ -26,6 +27,7 @@ const HANDWRITING_STYLES = [
 ]
 
 export default function EditorPage() {
+  const navigate = useNavigate()
   const [text, setText] = useState('')
   const [penColor, setPenColor] = useState('#2563eb')
   const [paperType, setPaperType] = useState('lined')
@@ -40,18 +42,91 @@ export default function EditorPage() {
   const [letterSpacing, setLetterSpacing] = useState(5)
   const [wordSpacing, setWordSpacing] = useState(5)
   const [lineHeight, setLineHeight] = useState(5)
+  const [words, setWords] = useState<WordObject[]>([])
+
+  // Redirect to login if no token
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      navigate('/login', { replace: true })
+    }
+  }, [navigate])
 
   const handleGenerate = async () => {
     if (!text.trim()) return
+
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
     setGenerating(true)
     setProgress(0)
     setStatus('Initializing...')
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise((r) => setTimeout(r, 200))
-      setProgress(i)
-      setStatus(i < 100 ? `Rendering... ${i}%` : 'Done!')
+    setWords([])
+
+    try {
+      // Step 1 — start generation task
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          text,
+          settings: {
+            background_id: paperType,
+            color_id: penColor,
+            handwriting_style: handwriting,
+            messiness_level: sloppiness,
+            mistakes_level: mistakes,
+            tilt_level: tilt,
+            font_size: fontSize,
+            letter_spacing: letterSpacing,
+            word_spacing: wordSpacing,
+            line_height: lineHeight,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setStatus(data?.message || 'Generation failed. Please try again.')
+        setGenerating(false)
+        return
+      }
+
+      const { task_id } = await res.json()
+
+      // Step 2 — listen to SSE for real progress
+      const sse = new EventSource(`/api/generate/stream?task_id=${task_id}`)
+
+      sse.addEventListener('progress', (e) => {
+        const { progress: p, status: s } = JSON.parse(e.data)
+        setProgress(p)
+        setStatus(s || `Rendering... ${p}%`)
+      })
+
+      sse.addEventListener('done', (e) => {
+        const { result } = JSON.parse(e.data)
+        setWords(result)
+        setProgress(100)
+        setStatus('Done!')
+        sse.close()
+        setGenerating(false)
+      })
+
+      sse.onerror = () => {
+        setStatus('Generation failed. Please try again.')
+        sse.close()
+        setGenerating(false)
+      }
+    } catch {
+      setStatus('Server unavailable. Please try again later.')
+      setGenerating(false)
     }
-    setGenerating(false)
   }
 
   const handleReset = () => {
@@ -264,7 +339,7 @@ export default function EditorPage() {
             <div className="flex-1 h-px bg-cyber-muted" />
           </div>
             <div className="flex-1 bg-cyber-surface border border-cyber-muted flex items-center justify-center overflow-visible" style={{ minHeight: 400 }}>
-            <HandwritingCanvas words={[]} background={paperType} />
+            <HandwritingCanvas words={words} background={paperType} />
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1 text-xs">Download PNG</Button>

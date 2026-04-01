@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-interface WordObject {
+export interface WordObject {
   imageUrl: string
   x: number
   y: number

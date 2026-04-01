@@ -32,12 +32,13 @@ export default function LoginPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data?.message || 'Невірні облікові дані')
+        setError(data?.message || data?.detail || 'Невірні облікові дані')
         return
       }
 
-      localStorage.setItem('access_token', data.tokens.access_token)
-      localStorage.setItem('refresh_token', data.tokens.refresh_token)
+      // Backend returns tokens at top level, not nested under data.tokens
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('refresh_token', data.refresh_token)
       navigate('/editor')
     } catch {
       setError('Сервер недоступний. Спробуйте пізніше.')

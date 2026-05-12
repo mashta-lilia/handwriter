@@ -18,10 +18,4 @@ RUN echo 'server { listen 80; location / { root /usr/share/nginx/html; index ind
 
 EXPOSE 80
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-RUN chown -R appuser:appgroup /app
-
-USER appuser
-
 CMD ["nginx", "-g", "daemon off;"]

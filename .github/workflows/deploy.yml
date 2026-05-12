@@ -18,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -37,8 +37,24 @@ jobs:
           docker push ${{ env.IMAGE_PREFIX }}/backend:${{ github.sha }}
           docker push ${{ env.IMAGE_PREFIX }}/backend:latest
 
+          docker build \
+            -t ${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }} \
+            -t ${{ env.IMAGE_PREFIX }}/frontend:latest \
+            ./frontend
+          
+          docker push ${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }}
+          docker push ${{ env.IMAGE_PREFIX }}/frontend:latest
+
+          docker build \
+            -t ${{ env.IMAGE_PREFIX }}/ml_core:${{ github.sha }} \
+            -t ${{ env.IMAGE_PREFIX }}/ml_core:latest \
+            ./ml_core
+          
+          docker push ${{ env.IMAGE_PREFIX }}/ml_core:${{ github.sha }}
+          docker push ${{ env.IMAGE_PREFIX }}/ml_core:latest
+
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
@@ -46,13 +62,12 @@ jobs:
           script: |
             cd /opt/handwriter
 
-            echo "DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}" > .env.tmp
-            
+            echo "POSTGRES_USER=${{ secrets.PROD_DB_USER }}" > .env.tmp
+            echo "POSTGRES_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}" >> .env.tmp
+            echo "POSTGRES_DB=${{ secrets.PROD_DB_NAME }}" >> .env.tmp
+            echo "REDIS_URL=redis://redis:6379/0" >> .env.tmp
             echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> .env.tmp
             echo "MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}" >> .env.tmp
-            echo "PROD_DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}" >> .env.tmp
-            echo "PROD_DB_USER=${{ secrets.PROD_DB_USER }}" >> .env.tmp
-            echo "PROD_REDIS_URL=${{ secrets.PROD_REDIS_URL }}" >> .env.tmp
             echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env.tmp
             echo "TELEGRAM_BOT_USERNAME=${{ secrets.TELEGRAM_BOT_USERNAME }}" >> .env.tmp
             

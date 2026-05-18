@@ -18,6 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
  
 EXPOSE 8000
- 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
- 
+
+RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin -c "Docker image user" app
+
+RUN chown -R app:app /app
+
+USER app
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--proxy-headers", "--forwarded-allow-ips", "*"]

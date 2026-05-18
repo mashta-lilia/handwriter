@@ -17,4 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 
+RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
+
+RUN chown -R app:app /app
+
+USER app
+
 CMD ["python", "worker.py"] 

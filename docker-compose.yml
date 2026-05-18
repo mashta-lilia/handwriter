@@ -15,8 +15,10 @@ services:
         max-size: "10m"  
         max-file: "3"
     depends_on:
-      - frontend
-      - backend_api
+      backend_api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     networks:
       - app_network
 
@@ -25,6 +27,7 @@ services:
     volumes:
       - /var/www/certbot:/var/www/certbot
       - /etc/letsencrypt:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
   frontend:
     image: ghcr.io/mashta-lilia/handwriter/frontend:latest
     restart: unless-stopped
@@ -72,6 +75,13 @@ services:
         condition: service_started
     networks:
       - app_network
+      
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; import sys; resp = urllib.request.urlopen('http://localhost:8000/api/health', timeout=5); sys.exit(0 if resp.getcode() == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   ml_worker:
     image: ghcr.io/mashta-lilia/handwriter/ml_worker:latest
@@ -98,9 +108,12 @@ services:
         max-size: "10m"   
         max-file: "3"
     depends_on:
-      - redis
-      - db
-      - minio
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     networks:
       - app_network
 
@@ -148,6 +161,11 @@ services:
       - redis_data:/data
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio
@@ -163,19 +181,25 @@ services:
       - minio_data:/data
     networks:
       - app_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   minio-init:
     image: minio/mc
+    environment:
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     depends_on:
-      - minio
+      minio:
+        condition: service_healthy
     entrypoint: >
       /bin/sh -c "
       sleep 5;
       mc alias set myminio http://minio:9000 admin ${MINIO_ROOT_PASSWORD};
       mc mb myminio/handwriting-assets || true;
       mc mb myminio/handwriting-words || true;
-      mc anonymous set public myminio/handwriting-assets;
-      mc anonymous set public myminio/handwriting-words;
       exit 0;
       "
 

@@ -64,8 +64,10 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            script: |
             cd /opt/handwriter
 
+            # Створення .env файлу
             echo "POSTGRES_USER=${{ secrets.PROD_DB_USER }}" > .env.tmp
             echo "POSTGRES_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}" >> .env.tmp
             echo "POSTGRES_DB=${{ secrets.PROD_DB_NAME }}" >> .env.tmp
@@ -81,18 +83,24 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
-            # Обрати внимание: на сервере уже должен быть залогинен docker в ghcr.io, 
-            # иначе docker compose pull не сможет скачать приватные образы.
             docker compose pull
+            
+            docker compose up -d db redis minio
+            
+            echo "Очікуємо 15 секунд для старту бази даних..."
+            sleep 15
+            
             docker compose run --rm backend_api alembic upgrade head
+            
             docker compose up -d
             
-            echo "Очікуємо 10 секунд для ініціалізації..."
             sleep 10
             
             if ! curl --fail --max-time 5 https://handwritter.me/api/health; then
-              echo "❌ Сервер впав при запуску. Логи:"
-              docker compose logs --tail=100 backend_api
+              echo "❌ Сервер впав при запуску. Логи бекенду:"
+              docker compose logs --tail=50 backend_api
+              echo "Логи бази даних:"
+              docker compose logs --tail=50 db
               exit 1
             fi
             echo "✅ Деплой успішно завершено!"
